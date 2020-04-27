@@ -1,6 +1,6 @@
 import pnormaldist from 'pnormaldist';
 
-const DEFAULT_CONFIDENCE = 0.95;
+const DEFAULT_CONFIDENCE = 0.9;
 
 function ranking_confidence(value, n, confidence) {
     if (n === 0) return 0;

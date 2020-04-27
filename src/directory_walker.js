@@ -1,15 +1,16 @@
 import path from 'path';
 import {promises as fsPromises} from 'fs';
-import parseMediaInfo from "./util/video-mime";
 
 class FileManager {
     basePath;
+    videoMimeParser;
 
     moviesPath;
     showsPath;
 
-    constructor(basePath) {
+    constructor(basePath, videoMimeParser) {
         this.basePath = basePath;
+        this.videoMimeParser = videoMimeParser;
     }
 
     async updateConfiguration() {
@@ -32,7 +33,9 @@ class FileManager {
             .readdir(this.moviesPath, {withFileTypes: true})
             .then(result => result
                 .filter(dir => dir.isDirectory())
-                .map(dir => dir.name)
+                .map(dir => {
+                    return path.join(this.moviesPath, dir.name)
+                })
             );
     }
 
@@ -41,15 +44,28 @@ class FileManager {
             .readdir(this.showsPath, {withFileTypes: true})
             .then(result => result
                 .filter(dir => dir.isDirectory())
-                .map(dir => dir.name)
+                .map(dir => {
+                    return path.join(this.moviesPath, dir.name)
+                })
             );
+    }
+
+    async findIds(filePath) {
+        return await fsPromises
+            .readFile(path.join(filePath, "metadata.json"))
+            .then(result => {
+                if (!result) return null;
+                const json = JSON.parse(result)
+                if (!json) return null;
+                return json.ids
+            }).catch(_ => null);
     }
 
     async findMedia(base) {
         const files = await fsPromises
             .readdir(base, {withFileTypes: true})
             .then(result => result
-                .filter(dir => dir.isFile())
+                .filter(dir => !dir.isDirectory())
                 .map(dir => dir.name)
             );
 
@@ -57,13 +73,12 @@ class FileManager {
 
         const subtitleBase = path.join(base, "subtitles");
         const subtitleFiles = (await fsPromises
-            .readdir(subtitleBase, {withFileTypes: true})
-            .then(result => result
-                .filter(dir => dir.isFile())
-                .map(dir => dir.name)
-            ).catch(err => {
-                // Do nothing, just means file does not exist
-            })) || [];
+                .readdir(subtitleBase, {withFileTypes: true})
+                .then(result => result
+                    .filter(dir => dir.isFile())
+                    .map(dir => dir.name)
+                ).catch(_ => null)) // Do nothing, just means file does not exist
+            || [];
         const subtitles = subtitleFiles.filter(fileName =>
             fileName.endsWith(".srt") ||
             fileName.endsWith(".ttml") ||
@@ -71,11 +86,18 @@ class FileManager {
             fileName.endsWith(".vtt")
         )
 
-        const mediaFiles = dashManifest ? [] : files.filter(fileName =>
+        const mediaFiles = dashManifest ? [dashManifest] : files.filter(fileName =>
             fileName.endsWith(".mp4") ||
             fileName.endsWith(".webm") ||
             fileName.endsWith(".ogg")
         )
+
+        const media = await Promise.all(mediaFiles.map(fileName => this.videoMimeParser.parseMediaInfo(path.join(base, fileName)).then(metadata => {
+            return {
+                src: encodeURI(path.relative(this.basePath, path.join(base, fileName))),
+                ...metadata
+            }
+        })));
 
         return {
             subtitles: subtitles.map(name => {
@@ -85,18 +107,10 @@ class FileManager {
                     region: region,
                     specifier: specifier,
                     format: format,
-                    src: path.join("subtitles", name)
+                    src: encodeURI(path.relative(this.basePath, path.join(base, "subtitles", name)))
                 }
             }),
-            media: dashManifest ? [{
-                src: dashManifest,
-                container: "application/xml+dash"
-            }] : await Promise.all(mediaFiles.map(fileName => parseMediaInfo(path.join(base, fileName)).then(metadata => {
-                return {
-                    src: fileName,
-                    ...metadata
-                }
-            })))
+            media: media
         }
     }
 }

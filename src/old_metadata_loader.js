@@ -58,28 +58,6 @@ function downloadImage(url, filePath) {
     }));
 }
 
-async function processSubtitles(filePath) {
-    const subtitlesPath = path.join(filePath, 'subtitles');
-    let subtitles;
-    if (fs.existsSync(subtitlesPath)) {
-        const files = await fs.promises.readdir(subtitlesPath);
-        subtitles = files.map((filename) => {
-            const match = /^(?<language>.+)(?<specifier>-.+)?\.(?<type>.*)$/.exec(path.basename(filename));
-            if (match) {
-                const {language, specifier, type} = match.groups;
-                return {
-                    language: language,
-                    specifier: specifier,
-                    type: type,
-                }
-            } else {
-                return null;
-            }
-        }).filter(el => el);
-    }
-    return subtitles;
-}
-
 async function processFile(isShow, tmdbApi, fanartApi, imdb, tvdbApi, uuid, filePath) {
     const {name, year} = /^(?<name>.+) \((?<year>\d+)\)$/.exec(path.basename(filePath)).groups;
 
