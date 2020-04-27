@@ -30,11 +30,11 @@ class ImdbApi {
     }
 
     search(type, title, year) {
-        return this.queryJson(ImdbApi.querySearch, {
+        return this.query(ImdbApi.querySearch, {
             1: type,
             2: title, 3: title,
             4: year
-        });
+        }).then(row => row.tconst);
     }
 
     static querySearch = `

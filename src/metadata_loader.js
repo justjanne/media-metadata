@@ -2,6 +2,7 @@ import ranking_confidence from './util/statistics';
 import uuid from 'uuid';
 import path from "path";
 import downloadFile from "./util/download-file";
+import encodePath from "./util/encode-path";
 
 class MetadataLoader {
     imdb;
@@ -130,22 +131,51 @@ class MetadataLoader {
         } : null;
     }
 
+    async identifyShow(title, year) {
+        /*
+        FIXME: Implement this properly, previous implementation for clarity below
+
+        const imdbId = await this.imdb.search("tvSeries", title, year);
+
+        const tvdbResults = await this.tvdb.getSeriesByImdbId(imdbId).catch((e) => console.error(e));
+        const tvdbResult = tvdbResults[0];
+
+        if (!tvdbResult) return null;
+
+        const tmdbResults = await this.tmdb.request(`find/${imdbId}`, {
+            "external_source": "imdb_id",
+        }).catch((e) => console.error(e));
+
+        const tmdbResult = tmdbResults.tv_results.sort((a, b) => {
+            return b.popularity - a.popularity;
+        })[0];
+
+        if (!tmdbResult) return null;
+
+        return {
+            imdb: imdbId,
+            tvdb: tvdbResult.id,
+            tmdb: tmdbResult.id,
+        };
+         */
+    }
+
     async processImages(basePath, filePath, images) {
         const imageData = !images ? [] : [
             !images.logo ? null : !images.logo.url ? null : {
                 type: "logo",
                 url: images.logo.url,
-                src: encodeURI(path.relative(basePath, path.join(filePath, "metadata", `logo${path.extname(images.logo.url)}`)))
+                src: encodePath(path.relative(basePath, path.join(filePath, "metadata", `logo${path.extname(images.logo.url)}`)))
             },
             !images.poster ? null : !images.poster.file_path ? null : {
                 type: "poster",
                 url: this.tmdb.getImageUrl(images.poster.file_path),
-                src: encodeURI(path.relative(basePath, path.join(filePath, "metadata", `poster${path.extname(images.poster.file_path)}`)))
+                src: encodePath(path.relative(basePath, path.join(filePath, "metadata", `poster${path.extname(images.poster.file_path)}`)))
             },
             !images.backdrop ? null : !images.backdrop.file_path ? null : {
                 type: "backdrop",
                 url: this.tmdb.getImageUrl(images.backdrop.file_path),
-                src: encodeURI(path.relative(basePath, path.join(filePath, "metadata", `backdrop${path.extname(images.backdrop.file_path)}`)))
+                src: encodePath(path.relative(basePath, path.join(filePath, "metadata", `backdrop${path.extname(images.backdrop.file_path)}`)))
             }
         ].filter(el => el !== null);
 

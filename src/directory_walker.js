@@ -1,5 +1,6 @@
 import path from 'path';
 import {promises as fsPromises} from 'fs';
+import encodePath from "./util/encode-path";
 
 class FileManager {
     basePath;
@@ -94,7 +95,7 @@ class FileManager {
 
         const media = await Promise.all(mediaFiles.map(fileName => this.videoMimeParser.parseMediaInfo(path.join(base, fileName)).then(metadata => {
             return {
-                src: encodeURI(path.relative(this.basePath, path.join(base, fileName))),
+                src: encodePath(path.relative(this.basePath, path.join(base, fileName))),
                 ...metadata
             }
         })));
@@ -107,7 +108,7 @@ class FileManager {
                     region: region,
                     specifier: specifier,
                     format: format,
-                    src: encodeURI(path.relative(this.basePath, path.join(base, "subtitles", name)))
+                    src: encodePath(path.relative(this.basePath, path.join(base, "subtitles", name)))
                 }
             }),
             media: media

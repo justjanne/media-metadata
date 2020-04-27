@@ -1,4 +1,4 @@
-import fs, {promises as fsPromises} from 'fs';
+import {promises as fsPromises} from 'fs';
 import path from 'path';
 import xml2json from 'xml2json';
 import {exec} from 'child_process';
@@ -16,7 +16,7 @@ class VideoMimeParser {
     async parseMediaInfoDash(filePath) {
         const info = xml2json.toJson(await fsPromises.readFile(filePath), {object: true});
         return {
-            container: "application/xml+dash",
+            container: "application/dash+xml",
             tracks: info.MPD.Period.AdaptationSet.map((track, i) => {
                 return {
                     id: i,
