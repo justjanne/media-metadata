@@ -29,6 +29,14 @@ class ImdbApi {
         });
     }
 
+    findEpisodeById(id, seasonNumber, episodeNumber) {
+        return this.queryJson(ImdbApi.queryGetEpisode, {
+            1: id,
+            2: seasonNumber,
+            3: episodeNumber,
+        });
+    }
+
     search(type, title, year) {
         return this.query(ImdbApi.querySearch, {
             1: type,
@@ -118,6 +126,20 @@ class ImdbApi {
                  LEFT OUTER JOIN title_ratings on title.tconst = title_ratings.tconst
                  LEFT OUTER JOIN title_crew on title.tconst = title_crew.tconst
         WHERE title.tconst = ?
+    `;
+
+    static queryGetEpisode = `
+        SELECT json_object(
+                       'id', title.tconst,
+                       'primaryTitle', title.primaryTitle,
+                       'originalTitle', title.originalTitle,
+                       'runtimeMinutes', title.runtimeMinutes
+                   ) AS json
+        FROM title_episode
+                 JOIN title ON title_episode.tconst = title.tconst
+        WHERE title_episode.parentTconst = ?
+          AND seasonNumber = ?
+          AND episodeNumber = ?
     `;
 }
 

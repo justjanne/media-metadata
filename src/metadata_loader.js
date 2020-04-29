@@ -61,14 +61,45 @@ class MetadataLoader {
             }),
             ratings: tmdbContentRatings.results.map(el => {
                 const certification =
-                    Array.isArray(el) ? el.release_dates.sort((a, b) => b.type - a.type).map(el => el.certification) :
-                        el ? el.rating :
-                            null;
+                    Array.isArray(el.release_dates) ? el.release_dates.sort((a, b) => b.type - a.type).map(el => el.certification)[0] :
+                    el ? el.rating :
+                    null;
                 return {
                     region: el.iso_3166_1,
                     certification: certification,
                 }
             }).filter(el => el.certification)
+        }
+    }
+
+    transformEpisodeData(ids, imdbResult, tmdbResult, tmdbTranslations) {
+        if (!imdbResult) return null;
+        if (!tmdbResult) return null;
+        if (!tmdbTranslations) return null;
+
+        return {
+            ids: ids,
+            originalLanguage: tmdbResult.original_language,
+            originalTitle: imdbResult.originalTitle,
+            primaryTitle: imdbResult.primaryTitle,
+            titles: tmdbTranslations.translations.map(el => {
+                return {
+                    title: el.data.name,
+                    region: el.iso_3166_1,
+                    languages: el.iso_639_1 ? el.iso_639_1.split(",") : [],
+                }
+            }).filter(el => el.overview),
+            primaryDescription: {
+                overview: tmdbResult.overview,
+            },
+            descriptions: tmdbTranslations.translations.map(el => {
+                return {
+                    region: el.iso_3166_1,
+                    languages: el.iso_639_1 ? el.iso_639_1.split(",") : [],
+                    overview: el.data.overview,
+                }
+            }).filter(el => el.overview),
+            runtime: imdbResult.runtimeMinutes
         }
     }
 
@@ -107,9 +138,11 @@ class MetadataLoader {
 
         return {
             logo: fanartImages && fanartImages.hdmovielogo ? findbest(fanartImages.hdmovielogo) : null,
-            poster: tmdbImages.posters.map(calculateConfidenceAndQuality(true, originalLanguage))
+            poster: tmdbImages.posters && tmdbImages.posters.map(calculateConfidenceAndQuality(true, originalLanguage))
                 .sort(imageComparator)[0],
-            backdrop: tmdbImages.backdrops.map(calculateConfidenceAndQuality(false, originalLanguage))
+            backdrop: tmdbImages.backdrops && tmdbImages.backdrops.map(calculateConfidenceAndQuality(false, originalLanguage))
+                .sort(imageComparator)[0],
+            still: tmdbImages.stills && tmdbImages.stills.map(calculateConfidenceAndQuality(false, originalLanguage))
                 .sort(imageComparator)[0],
         }
     }
@@ -119,45 +152,59 @@ class MetadataLoader {
             query: title,
             primary_release_year: year
         }).catch((e) => console.error(e));
+        if (!results) return null;
 
         const result = results.results.sort((a, b) => {
             return b.popularity - a.popularity;
         })[0];
+        if (!result) return null;
 
-        return result ? {
-            uuid: uuid.v4(),
-            tmdb: result.id,
-            imdb: (await this.tmdb.request(`movie/${result.id}`)).imdb_id
-        } : null;
-    }
-
-    async identifyShow(title, year) {
-        /*
-        FIXME: Implement this properly, previous implementation for clarity below
-
-        const imdbId = await this.imdb.search("tvSeries", title, year);
-
-        const tvdbResults = await this.tvdb.getSeriesByImdbId(imdbId).catch((e) => console.error(e));
-        const tvdbResult = tvdbResults[0];
-
-        if (!tvdbResult) return null;
-
-        const tmdbResults = await this.tmdb.request(`find/${imdbId}`, {
-            "external_source": "imdb_id",
-        }).catch((e) => console.error(e));
-
-        const tmdbResult = tmdbResults.tv_results.sort((a, b) => {
-            return b.popularity - a.popularity;
-        })[0];
-
+        const tmdbResult = await this.tmdb.request(`movie/${result.id}`);
         if (!tmdbResult) return null;
 
         return {
+            uuid: uuid.v4(),
+            imdb: tmdbResult.imdb_id,
+            tmdb: result.id,
+            tvdb: null,
+        }
+    }
+
+    async identifyShow(showTitle, showYear) {
+        const tvdbResults = await this.tvdb.getSeriesByName(showTitle)
+        if (!tvdbResults) return null;
+
+        const result = tvdbResults.find(show => {
+            const {year} = /^(?<year>\d+)(?:-(?<month>\d+)(?:-(?<day>\d+))?)?$/.exec(show.firstAired).groups;
+            return year === showYear;
+        });
+        if (!result) return null;
+
+        const tvdbId = result.id;
+        if (!tvdbId) return null;
+
+        const tvdbSeries = await this.tvdb.getSeriesById(tvdbId);
+        if (!tvdbSeries) return null;
+
+        const imdbId = tvdbSeries.imdbId;
+        const tmdbResults = (await this.tmdb.request(`find/${imdbId}`, {
+            external_source: "imdb_id"
+        })) || (await this.tmdb.request(`find/${tvdbId}`, {
+            external_source: "tvdb_id"
+        }))
+        if (!tmdbResults) return null;
+
+        const tmdbSeries = tmdbResults.tv_results ? tmdbResults.tv_results[0] : null;
+        if (!tmdbSeries) return null;
+
+        const tmdbId = tmdbSeries.id;
+
+        return {
+            uuid: uuid.v4(),
             imdb: imdbId,
-            tvdb: tvdbResult.id,
-            tmdb: tmdbResult.id,
-        };
-         */
+            tvdb: tvdbId,
+            tmdb: tmdbId,
+        }
     }
 
     async processImages(basePath, filePath, images) {
@@ -176,6 +223,11 @@ class MetadataLoader {
                 type: "backdrop",
                 url: this.tmdb.getImageUrl(images.backdrop.file_path),
                 src: encodePath(path.relative(basePath, path.join(filePath, "metadata", `backdrop${path.extname(images.backdrop.file_path)}`)))
+            },
+            !images.still ? null : !images.still.file_path ? null : {
+                type: "still",
+                url: this.tmdb.getImageUrl(images.still.file_path),
+                src: encodePath(path.relative(basePath, path.join(filePath, "metadata", `still${path.extname(images.still.file_path)}`)))
             }
         ].filter(el => el !== null);
 
@@ -184,16 +236,37 @@ class MetadataLoader {
         return imageData;
     }
 
-    async loadMetadata(ids, isEpisode) {
+    async loadEpisodeMetadata(ids, episodeIdentifier) {
+        const {season, episode} = episodeIdentifier;
+        const tmdbSources = [
+            `tv/${ids.tmdb}/season/${season}/episode/${episode}`,
+            `tv/${ids.tmdb}/season/${season}/episode/${episode}/translations`,
+            `tv/${ids.tmdb}/season/${season}/episode/${episode}/images`
+        ]
+
+        const [imdbResult, tmdbResult, tmdbTranslations, tmdbImages] = await Promise.all([
+            this.imdb.findEpisodeById(ids.imdb, season, episode).catch(_ => null),
+            ...tmdbSources.map(url => this.tmdb.request(url).catch(_ => null)),
+        ].filter(el => el !== null));
+
+        const metadata = this.transformEpisodeData(ids, imdbResult, tmdbResult, tmdbTranslations);
+        if (!metadata) {
+            return null;
+        }
+        return {
+            metadata: metadata,
+            images: this.chooseImages(metadata.originalLanguage, tmdbImages),
+        };
+    }
+
+    async loadMetadata(ids) {
         const titleType = await this.imdb.findTypeById(ids.imdb);
 
         function tmdbSources() {
             if (titleType !== "tvSeries") {
                 return [`movie/${ids.tmdb}`, `movie/${ids.tmdb}/translations`, `movie/${ids.tmdb}/release_dates`, `movie/${ids.tmdb}/images`]
-            } else if (!isEpisode) {
-                return [`tv/${ids.tmdb}`, `tv/${ids.tmdb}/translations`, `tv/${ids.tmdb}/content_ratings`, `tv/${ids.tmdb}/images`]
             } else {
-                return [`tv/${ids.tmdb}`, `tv/${ids.tmdb}/translations`]
+                return [`tv/${ids.tmdb}`, `tv/${ids.tmdb}/translations`, `tv/${ids.tmdb}/content_ratings`, `tv/${ids.tmdb}/images`]
             }
         }
 
@@ -204,14 +277,13 @@ class MetadataLoader {
         const [imdbResult, tmdbResult, tmdbTranslations, tmdbContentRatings, tmdbImages, fanartImages] = await Promise.all([
             this.imdb.findById(ids.imdb).catch(_ => null),
             ...tmdbSources().map(url => this.tmdb.request(url).catch(_ => null)),
-            isEpisode ? null : this.fanart.request(fanartSource).catch(_ => null) // do nothing, it just means it wasn’t found
+            this.fanart.request(fanartSource).catch(_ => null) // do nothing, it just means it wasn’t found
         ].filter(el => el !== null));
 
         const metadata = this.transformData(ids, imdbResult, tmdbResult, tmdbContentRatings, tmdbTranslations);
         return {
             metadata: metadata,
-            // also use tvdb for images
-            images: isEpisode ? null : this.chooseImages(metadata.originalLanguage, tmdbImages, fanartImages),
+            images: this.chooseImages(metadata.originalLanguage, tmdbImages, fanartImages),
         };
     }
 }

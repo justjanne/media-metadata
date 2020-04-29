@@ -18,11 +18,13 @@ class VideoMimeParser {
         return {
             container: "application/dash+xml",
             tracks: info.MPD.Period.AdaptationSet.map((track, i) => {
+                const representations = track.Representation instanceof Array ? track.Representation : [track.Representation];
+
                 return {
                     id: i,
                     type: track.mimeType.substr(0, track.mimeType.indexOf('/')),
-                    codec: [...new Set(track.Representation.map(r => r.codecs))].join(","),
-                    bitrate: track.Representation.map(r => r.bandwidth).sort()[0],
+                    codec: [...new Set(representations.map(r => r.codecs))].join(","),
+                    bitrate: representations.map(r => r.bandwidth).sort()[0],
                     language: track.lang
                 }
             })

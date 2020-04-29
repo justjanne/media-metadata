@@ -46,19 +46,43 @@ class FileManager {
             .then(result => result
                 .filter(dir => dir.isDirectory())
                 .map(dir => {
-                    return path.join(this.moviesPath, dir.name)
+                    return path.join(this.showsPath, dir.name)
                 })
+            );
+    }
+
+    async listEpisodes(showPath) {
+        return fsPromises
+            .readdir(showPath, {withFileTypes: true})
+            .then(result => result
+                .filter(dir => dir.isDirectory())
+                .map(dir => {
+                    const match = /^(?:(?:(?<year>\d+)-(?<month>\d+)-(?<day>\d+))|(?:(?:S(?<season>\d+(?:[.\-–—&]\d+)?))?\p{L}*[\t\f ]*(?<episode>\d+(?:[.\-–—&]\d+)?)))(?:(?:[\t\f ]+(?:[\-–—:][\t\f ]*)?)(?<title>\S.*))?$/u.exec(dir.name);
+                    if (!match) {
+                        return null;
+                    }
+                    const {season, episode, year, month, day} = match.groups
+                    return {
+                        filePath: path.join(showPath, dir.name),
+                        src: encodePath(path.relative(this.basePath, path.join(showPath, dir.name))),
+                        episodeIdentifier: {
+                            season: season,
+                            episode: episode,
+                            year: year,
+                            month: month,
+                            day: day,
+                        },
+                    }
+                }).filter(el => el !== null)
             );
     }
 
     async findIds(filePath) {
         return await fsPromises
-            .readFile(path.join(filePath, "metadata.json"))
+            .readFile(path.join(filePath, "ids.json"))
             .then(result => {
                 if (!result) return null;
-                const json = JSON.parse(result)
-                if (!json) return null;
-                return json.ids
+                return JSON.parse(result);
             }).catch(_ => null);
     }
 

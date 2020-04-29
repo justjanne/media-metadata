@@ -31,6 +31,10 @@ async function main() {
         const {name, year} = /^(?<name>.+) \((?<year>\d+)\)$/.exec(path.basename(filePath)).groups;
 
         const ids = (await fileManager.findIds(filePath)) || (await loader.identifyMovie(name, year));
+        if (!ids) {
+            console.error(`Could not identify movie ${name} (${year}) at ${filePath}`)
+            return;
+        }
         const [media, {metadata, images}] = await Promise.all([
             fileManager.findMedia(filePath),
             loader.loadMetadata(ids),
@@ -52,34 +56,52 @@ async function main() {
         ]);
     }
 
-    async function processEpisode(ids, episodeIdentifier, filePath) {
-        const episodeIds = loader.identifyEpisode(ids, episodeIdentifier);
-        const {episodeMetadata, _} = await loader.loadMetadata(episodeIds, true)
+    async function processEpisode(showIds, episodeIdentifier, filePath) {
+        const [media, {metadata, images}] = await Promise.all([
+            fileManager.findMedia(filePath),
+            loader.loadEpisodeMetadata(showIds, episodeIdentifier),
+        ]);
+        const imageData = await loader.processImages(basePath, filePath, images);
 
         await Promise.all([
-            fsPromises.writeFile(path.join(filePath, "ids.json"), JSON.stringify(episodeIds, null, 2)),
-            fsPromises.writeFile(path.join(filePath, "metadata.json"), JSON.stringify(episodeMetadata, null, 2)),
+            fsPromises.writeFile(path.join(filePath, "metadata.json"), JSON.stringify({
+                ...metadata,
+                ...media,
+                images: imageData.map(img => {
+                    return {
+                        type: img.type,
+                        src: img.src,
+                    }
+                }),
+            }, null, 2)),
         ]);
     }
 
     async function processShow(filePath) {
-        if (1) return;
-
         const {name, year} = /^(?<name>.+) \((?<year>\d+)\)$/.exec(path.basename(filePath)).groups;
         const ids = (await fileManager.findIds(filePath)) || (await loader.identifyShow(name, year));
-        const episodes = fileManager.findEpisodes(filePath);
+        if (!ids) {
+            console.error(`Could not identify show ${name} (${year}) at ${filePath}`)
+            return;
+        }
+        const episodes = await fileManager.listEpisodes(filePath);
 
-        const {metadata, rawImages} = await Promise.all([
-            loader.loadMetadata(ids)
-        ]);
-        const images = await loader.processImages(basePath, filePath, rawImages);
+        const {metadata, images} = await loader.loadMetadata(ids);
+        const imageData = await loader.processImages(basePath, filePath, images);
         await Promise.all([
-            ...episodes.map(async ({episodeIdentifier, filePath}) => await processEpisode(ids, episodeIdentifier, filePath)),
+            ...episodes.map(async ({episodeIdentifier, filePath}) => await processEpisode(ids, episodeIdentifier, filePath).catch(err => {
+                console.error(`Error processing episode ${JSON.stringify(episodeIdentifier)} of show ${JSON.stringify(ids)}: `, err);
+            })),
             fsPromises.writeFile(path.join(filePath, "ids.json"), JSON.stringify(ids, null, 2)),
             fsPromises.writeFile(path.join(filePath, "metadata.json"), JSON.stringify({
                 ...metadata,
-                episodes: episodes,
-                images: images,
+                episodes: episodes.map(episode => {
+                    return {
+                        src: episode.src,
+                        episodeIdentifier: episode.episodeIdentifier,
+                    }
+                }),
+                images: imageData,
             }, null, 2)),
         ]);
     }
