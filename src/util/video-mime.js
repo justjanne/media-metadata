@@ -23,7 +23,7 @@ class VideoMimeParser {
                 return {
                     id: i,
                     type: track.mimeType.substr(0, track.mimeType.indexOf('/')),
-                    codec: [...new Set(representations.map(r => r.codecs))].join(","),
+                    codecs: [...new Set(representations.map(r => r.codecs))],
                     bitrate: representations.map(r => r.bandwidth).sort()[0],
                     language: track.lang
                 }
@@ -53,15 +53,18 @@ class VideoMimeParser {
     async parseMediaInfoMp4(filePath) {
         const [stdout] = await promisify(exec, `${this.mp4boxPath} --format json "${filePath}"`);
         const info = JSON.parse(stdout.replace(/,\s*([\]}])/g, "$1"));
+        const audioTrack = info.tracks.filter(track => track.type.toLowerCase() === "audio")[0];
+        const videoTrack = info.tracks.filter(track => track.type.toLowerCase() === "video")[0];
         return {
             container: "video/mp4",
             duration: +info.movie.duration,
-            tracks: info.tracks.filter(track => ["audio", "video"].includes(track.type.toLowerCase())).map(track => {
+            tracks: [audioTrack, videoTrack].map(track => {
                 return {
                     id: track.id,
                     type: track.type.toLowerCase(),
                     codecs: [
-                        track.sample_descriptions[0].codecs_string
+                        track.sample_descriptions[0].codecs_string ||
+                        track.sample_descriptions[0].coding
                     ],
                     language: track.language === "und" ? null : track.language,
                 }

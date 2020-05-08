@@ -9,7 +9,7 @@ function downloadFile(url, filePath) {
         https.get(url, function (response) {
             response.pipe(file);
             file.on('close', function () {
-                resolve();
+                resolve(response.headers);
             })
             file.on('finish', function () {
                 file.close()

@@ -3,104 +3,243 @@ import uuid from 'uuid';
 import path from "path";
 import downloadFile from "./util/download-file";
 import encodePath from "./util/encode-path";
+import {
+    Genre,
+    Person,
+    Title,
+    TitleCast,
+    TitleDescription,
+    TitleEpisode,
+    TitleGenre,
+    TitleImage, TitleMedia,
+    TitleName,
+    TitleRating,
+    TitleSubtitles
+} from "./model";
 
 class MetadataLoader {
     imdb;
     tmdb;
     tvdb;
     fanart;
+    storage;
 
-    constructor(imdb, tmdb, tvdb, fanart) {
+    constructor(imdb, tmdb, tvdb, fanart, storage) {
         this.imdb = imdb;
         this.tmdb = tmdb;
         this.tvdb = tvdb;
         this.fanart = fanart;
+        this.storage = storage;
     }
 
-    transformData(ids, imdbResult, tmdbResult, tmdbContentRatings, tmdbTranslations) {
-        return {
-            ids: ids,
-            originalLanguage: tmdbResult.original_language,
-            originalTitle: imdbResult.originalTitle,
-            primaryTitle: imdbResult.primaryTitle,
-            titles: imdbResult.aka
-                .filter(el => el.types !== null && el.types.includes("imdbDisplay") === true)
-                .map(el => {
-                    return {
-                        title: el.title,
-                        region: el.region,
-                        languages: el.languages ? el.languages.split(",") : [],
-                    }
-                }),
-            primaryDescription: {
-                overview: tmdbResult.overview,
-                tagline: tmdbResult.tagline,
-            },
-            descriptions: tmdbTranslations.translations.map(el => {
-                return {
-                    region: el.iso_3166_1,
-                    languages: el.iso_639_1 ? el.iso_639_1.split(",") : [],
-                    overview: el.data.overview,
-                    tagline: el.data.tagline,
-                }
-            }).filter(el => el.overview),
-            yearStart: imdbResult.startYear,
-            yearEnd: imdbResult.endYear,
-            runtime: imdbResult.runtimeMinutes,
-            seasons: imdbResult.seasons,
-            episodes: imdbResult.episodes,
-            genres: tmdbResult.genres.map(el => el.name),
-            cast: imdbResult.principals.map(el => {
-                return {
-                    id: el.person.nconst,
-                    name: el.person.primaryName,
-                    category: el.category,
-                    job: el.job,
-                    characters: el.characters,
-                }
-            }),
-            ratings: tmdbContentRatings.results.map(el => {
-                const certification =
-                    Array.isArray(el.release_dates) ? el.release_dates.sort((a, b) => b.type - a.type).map(el => el.certification)[0] :
-                    el ? el.rating :
-                    null;
-                return {
-                    region: el.iso_3166_1,
-                    certification: certification,
-                }
-            }).filter(el => el.certification)
+    async transformData(ids, imdbResult, tmdbResult, tmdbContentRatings, tmdbTranslations) {
+        const [title] = await Title.upsert({
+            id: ids.uuid,
+            imdb_id: ids.imdb,
+            tmdb_id: ids.tmdb,
+            tvdb_id: ids.tvdb,
+            original_language: tmdbResult.original_language,
+            runtime: imdbResult.runtime,
+            year_start: imdbResult.startYear,
+            year_end: imdbResult.endYear,
+        }, {returning: true});
+        await TitleName.destroy({
+            where: {
+                title_id: title.id,
+            }
+        })
+        const primaryTitleName = await TitleName.build({
+            region: null,
+            languages: null,
+            original: false,
+            name: imdbResult.primaryTitle,
+        });
+        await primaryTitleName.setTitle(title.id, {save: false});
+        await primaryTitleName.save();
+        const originalTitleName = await TitleName.build({
+            region: null,
+            languages: null,
+            original: true,
+            name: imdbResult.originalTitle,
+        });
+        await originalTitleName.setTitle(title.id, {save: false});
+        await originalTitleName.save();
+        for (let el of imdbResult.aka.filter(el => el.types !== null && el.types.includes("imdbDisplay") === true)) {
+            const titleName = await TitleName.build({
+                region: el.region,
+                languages: el.languages ? el.languages.split(",") : [],
+                original: false,
+                name: el.title,
+            })
+            await titleName.setTitle(title.id, {save: false});
+            await titleName.save();
         }
+        await TitleDescription.destroy({
+            where: {
+                title_id: title.id,
+            }
+        })
+        const originalTitleDescription = await TitleDescription.build({
+            region: null,
+            languages: null,
+            overview: tmdbResult.overview,
+            tagline: tmdbResult.tagline,
+        });
+        await originalTitleDescription.setTitle(title.id, {save: false});
+        await originalTitleDescription.save();
+        for (let el of tmdbTranslations.translations) {
+            const titleDescription = await TitleDescription.build({
+                region: el.iso_3166_1,
+                languages: el.iso_639_1 ? el.iso_639_1.split(",") : [],
+                overview: el.data.overview,
+                tagline: el.data.tagline,
+            })
+            await titleDescription.setTitle(title.id, {save: false});
+            await titleDescription.save();
+        }
+        await TitleCast.destroy({
+            where: {
+                title_id: title.id,
+            }
+        })
+        for (let el of imdbResult.principals) {
+            const [person] = await Person.upsert({
+                imdb_id: el.person.nconst,
+                name: el.person.primaryName,
+            }, {returning: true});
+
+            const titleCast = await TitleCast.build({
+                category: el.category,
+                characters: el.characters,
+                job: el.job,
+            });
+            await titleCast.setTitle(title.id, {save: false});
+            await titleCast.setPerson(person.id, {save: false});
+            await titleCast.save();
+        }
+
+        await TitleGenre.destroy({
+            where: {
+                title_id: title.id,
+            }
+        })
+        for (let el of tmdbResult.genres) {
+            const [genre] = await Genre.upsert({
+                tmdb_id: el.id,
+                name: el.name,
+            }, {returning: true});
+
+            const titleGenre = await TitleGenre.build({});
+            await titleGenre.setTitle(title.id, {save: false});
+            await titleGenre.setGenre(genre.id, {save: false});
+            await titleGenre.save();
+        }
+
+        await TitleRating.destroy({
+            where: {
+                title_id: title.id,
+            }
+        })
+        for (let el of tmdbContentRatings.results) {
+            const certification =
+                Array.isArray(el.release_dates) ? el.release_dates.sort((a, b) => b.type - a.type).map(el => el.certification)[0] :
+                    el ? el.rating :
+                        null;
+            const titleRating = await TitleRating.build({
+                region: el.iso_3166_1,
+                certification: certification,
+                title_id: title.id,
+            });
+            await titleRating.setTitle(title.id, {save: false});
+            await titleRating.save();
+        }
+
+        return title;
     }
 
-    transformEpisodeData(ids, imdbResult, tmdbResult, tmdbTranslations) {
+    async transformEpisodeData(ids, episodeIdentifier, imdbResult, tmdbResult, tmdbTranslations) {
         if (!imdbResult) return null;
         if (!tmdbResult) return null;
         if (!tmdbTranslations) return null;
 
-        return {
-            ids: ids,
-            originalLanguage: tmdbResult.original_language,
-            originalTitle: imdbResult.originalTitle,
-            primaryTitle: imdbResult.primaryTitle,
-            titles: tmdbTranslations.translations.map(el => {
-                return {
-                    title: el.data.name,
-                    region: el.iso_3166_1,
-                    languages: el.iso_639_1 ? el.iso_639_1.split(",") : [],
-                }
-            }).filter(el => el.overview),
-            primaryDescription: {
-                overview: tmdbResult.overview,
+        const showTitle = await Title.findByPk(ids.uuid);
+        const [mapping] = await TitleEpisode.findOrBuild({
+            where: {
+                show_id: showTitle.id,
+                season_number: episodeIdentifier.season,
+                episode_number: episodeIdentifier.episode,
             },
-            descriptions: tmdbTranslations.translations.map(el => {
-                return {
-                    region: el.iso_3166_1,
-                    languages: el.iso_639_1 ? el.iso_639_1.split(",") : [],
-                    overview: el.data.overview,
-                }
-            }).filter(el => el.overview),
-            runtime: imdbResult.runtimeMinutes
+            defaults: {
+                episode_id: uuid.v4(),
+            }
+        })
+        const [episodeTitle] = await Title.upsert({
+            id: mapping.episode_id,
+            imdb_id: imdbResult.id,
+            tmdb_id: tmdbResult.id,
+            tvdb_id: null,
+            original_language: showTitle.original_language,
+        }, {returning: true});
+        mapping.air_date = tmdbResult.air_date;
+        await mapping.setShow(showTitle.id, {save: false});
+        await mapping.setEpisode(episodeTitle, {save: false});
+        await mapping.save();
+        await TitleName.destroy({
+            where: {
+                title_id: episodeTitle.id,
+            }
+        })
+        const primaryTitleName = await TitleName.build({
+            region: null,
+            languages: null,
+            original: false,
+            name: imdbResult.primaryTitle,
+        });
+        await primaryTitleName.setTitle(episodeTitle.id, {save: false});
+        await primaryTitleName.save();
+        const originalTitleName = await TitleName.build({
+            region: null,
+            languages: null,
+            original: true,
+            name: imdbResult.originalTitle,
+        });
+        await originalTitleName.setTitle(episodeTitle.id, {save: false});
+        await originalTitleName.save();
+        for (let el of tmdbTranslations.translations) {
+            const titleName = await TitleName.build({
+                region: el.iso_3166_1,
+                languages: el.iso_639_1 ? el.iso_639_1.split(",") : [],
+                original: false,
+                name: el.data.name,
+            })
+            await titleName.setTitle(episodeTitle.id, {save: false});
+            await titleName.save();
         }
+        await TitleDescription.destroy({
+            where: {
+                title_id: episodeTitle.id,
+            }
+        })
+        const originalTitleDescription = await TitleDescription.build({
+            region: null,
+            languages: null,
+            overview: tmdbResult.overview,
+            tagline: tmdbResult.tagline,
+        });
+        await originalTitleDescription.setTitle(episodeTitle.id, {save: false});
+        await originalTitleDescription.save();
+        for (let el of tmdbTranslations.translations) {
+            const titleDescription = await TitleDescription.build({
+                region: el.iso_3166_1,
+                languages: el.iso_639_1 ? el.iso_639_1.split(",") : [],
+                overview: el.data.overview,
+                tagline: el.data.tagline,
+            })
+            await titleDescription.setTitle(episodeTitle.id, {save: false});
+            await titleDescription.save();
+        }
+
+        return episodeTitle;
     }
 
     chooseImages(originalLanguage, tmdbImages, fanartImages) {
@@ -115,12 +254,12 @@ class MetadataLoader {
                     confidence: ranking_confidence(element.vote_average, element.vote_count),
                     lang_quality: containsText ? (
                         element.iso_639_1 === originalLanguage ? 1.5 :
-                        element.iso_639_1 === null ? 1 :
-                        0
+                            element.iso_639_1 === null ? 1 :
+                                0
                     ) : (
                         element.iso_639_1 === null ? 1.5 :
-                        element.iso_639_1 === originalLanguage ? 1 :
-                        0
+                            element.iso_639_1 === originalLanguage ? 1 :
+                                0
                     ),
                     megapixels: (element.height * element.width) / 1000000,
                     ...element
@@ -231,9 +370,64 @@ class MetadataLoader {
             }
         ].filter(el => el !== null);
 
-        await Promise.all(imageData.map(img => downloadFile(img.url, path.join(filePath, "metadata", img.type + path.extname(img.url)))))
+        return await Promise.all(imageData.map(async img => {
+            const headers = await downloadFile(img.url, path.join(filePath, "metadata", img.type + path.extname(img.url)));
+            return {
+                mime: headers["content-type"],
+                ...img,
+            }
+        }));
+    }
 
-        return imageData;
+    async processImageMetadata(title, images) {
+        await TitleImage.destroy({
+            where: {
+                title_id: title.id,
+            }
+        })
+        for (let image of images) {
+            const titleImage = await TitleImage.build({
+                type: image.type,
+                mime: image.mime,
+                src: image.src,
+            })
+            await titleImage.setTitle(title.id, {save: false});
+            await titleImage.save();
+        }
+    }
+
+    async processMediaMetadata(title, media) {
+        await TitleMedia.destroy({
+            where: {
+                title_id: title.id,
+            }
+        })
+        for (let format of media.media) {
+            const titleMedia = await TitleMedia.build({
+                mime: format.container,
+                codecs: [...new Set(format.tracks.flatMap(track => track.codecs))],
+                languages: [...new Set(format.tracks.map(track => track.language).filter(it => !!it))],
+                src: format.src,
+            })
+            await titleMedia.setTitle(title.id, {save: false});
+            await titleMedia.save();
+        }
+        await TitleSubtitles.destroy({
+            where: {
+                title_id: title.id,
+            }
+        })
+        for (let subtitle of media.subtitles) {
+            const titleSubtitles = await TitleSubtitles.build({
+                language: subtitle.language,
+                region: subtitle.region,
+                specifier: subtitle.specifier,
+                format: subtitle.format,
+                src: subtitle.src
+            })
+            await titleSubtitles.setTitle(title.id, {save: false});
+            await titleSubtitles.save();
+        }
     }
 
     async loadEpisodeMetadata(ids, episodeIdentifier) {
@@ -249,13 +443,11 @@ class MetadataLoader {
             ...tmdbSources.map(url => this.tmdb.request(url).catch(_ => null)),
         ].filter(el => el !== null));
 
-        const metadata = this.transformEpisodeData(ids, imdbResult, tmdbResult, tmdbTranslations);
-        if (!metadata) {
-            return null;
-        }
+        const title = await this.transformEpisodeData(ids, episodeIdentifier, imdbResult, tmdbResult, tmdbTranslations);
+        if (!title) return;
         return {
-            metadata: metadata,
-            images: this.chooseImages(metadata.originalLanguage, tmdbImages),
+            title: title,
+            images: this.chooseImages(title.original_language, tmdbImages),
         };
     }
 
@@ -280,10 +472,10 @@ class MetadataLoader {
             this.fanart.request(fanartSource).catch(_ => null) // do nothing, it just means it wasn’t found
         ].filter(el => el !== null));
 
-        const metadata = this.transformData(ids, imdbResult, tmdbResult, tmdbContentRatings, tmdbTranslations);
+        const title = await this.transformData(ids, imdbResult, tmdbResult, tmdbContentRatings, tmdbTranslations);
         return {
-            metadata: metadata,
-            images: this.chooseImages(metadata.originalLanguage, tmdbImages, fanartImages),
+            title: title,
+            images: this.chooseImages(title.original_language, tmdbImages, fanartImages)
         };
     }
 }
