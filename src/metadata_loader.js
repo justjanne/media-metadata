@@ -113,7 +113,7 @@ class MetadataLoader {
             const titleCast = await TitleCast.build({
                 category: el.category,
                 characters: el.characters || [],
-                job: el.job,
+                credit: el.job,
             });
             await titleCast.setTitle(title.id, {save: false});
             await titleCast.setPerson(person.id, {save: false});

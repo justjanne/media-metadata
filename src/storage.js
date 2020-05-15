@@ -91,7 +91,7 @@ class Backend {
                 type: sequelize.DataTypes.ARRAY(sequelize.DataTypes.TEXT),
                 allowNull: false,
             },
-            job: sequelize.DataTypes.TEXT,
+            credit: sequelize.DataTypes.TEXT,
         }, {
             sequelize: this.db,
             underscored: true,
@@ -236,8 +236,14 @@ class Backend {
                 primaryKey: true
             },
             kind: sequelize.DataTypes.TEXT,
-            mime: sequelize.DataTypes.TEXT,
-            src: sequelize.DataTypes.TEXT,
+            mime: {
+                type: sequelize.DataTypes.TEXT,
+                allowNull: false,
+            },
+            src: {
+                type: sequelize.DataTypes.TEXT,
+                allowNull: false,
+            }
         }, {
             sequelize: this.db,
             underscored: true,
@@ -257,7 +263,10 @@ class Backend {
                 allowNull: false,
                 primaryKey: true
             },
-            mime: sequelize.DataTypes.TEXT,
+            mime: {
+                type: sequelize.DataTypes.TEXT,
+                allowNull: false,
+            },
             codecs: {
                 type: sequelize.DataTypes.ARRAY(sequelize.DataTypes.TEXT),
                 allowNull: false,
@@ -266,7 +275,10 @@ class Backend {
                 type: sequelize.DataTypes.ARRAY(sequelize.DataTypes.TEXT),
                 allowNull: false,
             },
-            src: sequelize.DataTypes.TEXT,
+            src: {
+                type: sequelize.DataTypes.TEXT,
+                allowNull: false,
+            },
         }, {
             sequelize: this.db,
             underscored: true,
@@ -319,7 +331,10 @@ class Backend {
                 primaryKey: true
             },
             region: sequelize.DataTypes.TEXT,
-            certification: sequelize.DataTypes.TEXT,
+            certification: {
+                type: sequelize.DataTypes.TEXT,
+                allowNull: false,
+            },
         }, {
             sequelize: this.db,
             underscored: true,
@@ -339,11 +354,17 @@ class Backend {
                 allowNull: false,
                 primaryKey: true
             },
-            format: sequelize.DataTypes.TEXT,
+            format: {
+                type: sequelize.DataTypes.TEXT,
+                allowNull: false,
+            },
             language: sequelize.DataTypes.TEXT,
             region: sequelize.DataTypes.TEXT,
             specifier: sequelize.DataTypes.TEXT,
-            src: sequelize.DataTypes.TEXT,
+            src: {
+                type: sequelize.DataTypes.TEXT,
+                allowNull: false,
+            },
         }, {
             sequelize: this.db,
             underscored: true,
