@@ -31,7 +31,10 @@ class Backend {
                 primaryKey: true
             },
             tmdb_id: sequelize.DataTypes.INTEGER,
-            name: sequelize.DataTypes.TEXT,
+            name: {
+                type: sequelize.DataTypes.TEXT,
+                allowNull: false,
+            },
         }, {
             sequelize: this.db,
             underscored: true,
@@ -45,8 +48,11 @@ class Backend {
                 allowNull: false,
                 primaryKey: true
             },
-            imdb_id: sequelize.DataTypes.STRING(64),
-            name: sequelize.DataTypes.TEXT,
+            imdb_id: sequelize.DataTypes.TEXT,
+            name: {
+                type: sequelize.DataTypes.TEXT,
+                allowNull: false,
+            },
         }, {
             sequelize: this.db,
             underscored: true,
@@ -60,10 +66,10 @@ class Backend {
                 allowNull: false,
                 primaryKey: true
             },
-            imdb_id: sequelize.DataTypes.STRING(64),
+            imdb_id: sequelize.DataTypes.TEXT,
             tmdb_id: sequelize.DataTypes.INTEGER,
             tvdb_id: sequelize.DataTypes.INTEGER,
-            original_language: sequelize.DataTypes.STRING(32),
+            original_language: sequelize.DataTypes.TEXT,
             runtime: sequelize.DataTypes.INTEGER,
             year_start: sequelize.DataTypes.INTEGER,
             year_end: sequelize.DataTypes.INTEGER,
@@ -81,7 +87,10 @@ class Backend {
                 primaryKey: true
             },
             category: sequelize.DataTypes.TEXT,
-            characters: sequelize.DataTypes.ARRAY(sequelize.DataTypes.TEXT),
+            characters: {
+                type: sequelize.DataTypes.ARRAY(sequelize.DataTypes.TEXT),
+                allowNull: false,
+            },
             job: sequelize.DataTypes.TEXT,
         }, {
             sequelize: this.db,
@@ -89,9 +98,17 @@ class Backend {
             modelName: 'title_cast',
             indexes: []
         });
-        TitleCast.belongsTo(Title);
+        TitleCast.belongsTo(Title, {
+            foreignKey: {
+                allowNull: false,
+            }
+        });
         Title.hasMany(TitleCast);
-        TitleCast.belongsTo(Person);
+        TitleCast.belongsTo(Person, {
+            foreignKey: {
+                allowNull: false,
+            }
+        });
         Person.hasMany(TitleCast);
 
         TitleDescription.init({
@@ -101,9 +118,19 @@ class Backend {
                 allowNull: false,
                 primaryKey: true
             },
-            region: sequelize.DataTypes.STRING(32),
-            languages: sequelize.DataTypes.ARRAY(sequelize.DataTypes.STRING(32)),
-            overview: sequelize.DataTypes.TEXT,
+            region: sequelize.DataTypes.TEXT,
+            languages: {
+                type: sequelize.DataTypes.ARRAY(sequelize.DataTypes.TEXT),
+                allowNull: false,
+            },
+            kind: {
+                type: sequelize.DataTypes.TEXT,
+                allowNull: false,
+            },
+            overview: {
+                type: sequelize.DataTypes.TEXT,
+                allowNull: false,
+            },
             tagline: sequelize.DataTypes.TEXT,
         }, {
             sequelize: this.db,
@@ -111,7 +138,11 @@ class Backend {
             modelName: 'title_description',
             indexes: []
         });
-        TitleDescription.belongsTo(Title);
+        TitleDescription.belongsTo(Title, {
+            foreignKey: {
+                allowNull: false,
+            }
+        });
         Title.hasMany(TitleDescription);
 
         TitleEpisode.init({
@@ -121,8 +152,8 @@ class Backend {
                 allowNull: false,
                 primaryKey: true
             },
-            season_number: sequelize.DataTypes.STRING(64),
-            episode_number: sequelize.DataTypes.STRING(64),
+            season_number: sequelize.DataTypes.TEXT,
+            episode_number: sequelize.DataTypes.TEXT,
             air_date: sequelize.DataTypes.DATEONLY,
         }, {
             sequelize: this.db,
@@ -131,7 +162,7 @@ class Backend {
             indexes: [
                 {
                     fields: [
-                        'show_id',
+                        'parent_id',
                         {
                             attribute: 'season_number',
                             collate: 'C',
@@ -147,7 +178,7 @@ class Backend {
                 {
                     using: 'BTREE',
                     fields: [
-                        'show_id',
+                        'parent_id',
                         {
                             attribute: 'air_date',
                             order: 'ASC',
@@ -156,10 +187,20 @@ class Backend {
                 }
             ]
         });
-        TitleEpisode.belongsTo(Title, {as: "Show", foreignKey: "show_id"});
-        TitleEpisode.belongsTo(Title, {as: "Episode", foreignKey: "episode_id"});
-        Title.hasMany(TitleEpisode, { foreignKey: "show_id", as: 'Episodes'});
-        Title.hasOne(TitleEpisode, { foreignKey: "episode_id", as: 'Show'});
+        TitleEpisode.belongsTo(Title, {
+            as: "Parent",
+            foreignKey: {
+                name: "parent_id",
+                allowNull: false,
+            }
+        })
+        Title.belongsTo(TitleEpisode, {
+            as: "Parent",
+            foreignKey: {
+                name: "parent_id",
+                allowNull: true,
+            }
+        })
         TitleGenre.init({
             id: {
                 type: sequelize.DataTypes.UUID,
@@ -175,9 +216,17 @@ class Backend {
             modelName: 'title_genre',
             indexes: []
         });
-        TitleGenre.belongsTo(Title);
+        TitleGenre.belongsTo(Title, {
+            foreignKey: {
+                allowNull: false,
+            }
+        });
         Title.hasMany(TitleGenre);
-        TitleGenre.belongsTo(Genre);
+        TitleGenre.belongsTo(Genre, {
+            foreignKey: {
+                allowNull: false,
+            }
+        });
         Genre.hasMany(TitleGenre);
         TitleImage.init({
             id: {
@@ -186,7 +235,7 @@ class Backend {
                 allowNull: false,
                 primaryKey: true
             },
-            type: sequelize.DataTypes.STRING(64),
+            kind: sequelize.DataTypes.TEXT,
             mime: sequelize.DataTypes.TEXT,
             src: sequelize.DataTypes.TEXT,
         }, {
@@ -195,7 +244,11 @@ class Backend {
             modelName: 'title_image',
             indexes: []
         });
-        TitleImage.belongsTo(Title);
+        TitleImage.belongsTo(Title, {
+            foreignKey: {
+                allowNull: false,
+            }
+        });
         Title.hasMany(TitleImage);
         TitleMedia.init({
             id: {
@@ -204,9 +257,15 @@ class Backend {
                 allowNull: false,
                 primaryKey: true
             },
-            mime: sequelize.DataTypes.STRING(64),
-            codecs: sequelize.DataTypes.ARRAY(sequelize.DataTypes.STRING(64)),
-            languages: sequelize.DataTypes.ARRAY(sequelize.DataTypes.STRING(32)),
+            mime: sequelize.DataTypes.TEXT,
+            codecs: {
+                type: sequelize.DataTypes.ARRAY(sequelize.DataTypes.TEXT),
+                allowNull: false,
+            },
+            languages: {
+                type: sequelize.DataTypes.ARRAY(sequelize.DataTypes.TEXT),
+                allowNull: false,
+            },
             src: sequelize.DataTypes.TEXT,
         }, {
             sequelize: this.db,
@@ -214,7 +273,11 @@ class Backend {
             modelName: 'title_media',
             indexes: []
         });
-        TitleMedia.belongsTo(Title);
+        TitleMedia.belongsTo(Title, {
+            foreignKey: {
+                allowNull: false,
+            }
+        });
         Title.hasMany(TitleMedia);
         TitleName.init({
             id: {
@@ -223,17 +286,30 @@ class Backend {
                 allowNull: false,
                 primaryKey: true
             },
-            region: sequelize.DataTypes.STRING(32),
-            languages: sequelize.DataTypes.ARRAY(sequelize.DataTypes.STRING(32)),
-            original: sequelize.DataTypes.BOOLEAN,
-            name: sequelize.DataTypes.TEXT,
+            region: sequelize.DataTypes.TEXT,
+            languages: {
+                type: sequelize.DataTypes.ARRAY(sequelize.DataTypes.TEXT),
+                allowNull: false,
+            },
+            kind: {
+                type: sequelize.DataTypes.TEXT,
+                allowNull: false,
+            },
+            name: {
+                type: sequelize.DataTypes.TEXT,
+                allowNull: false,
+            },
         }, {
             sequelize: this.db,
             underscored: true,
             modelName: 'title_name',
             indexes: []
         });
-        TitleName.belongsTo(Title);
+        TitleName.belongsTo(Title, {
+            foreignKey: {
+                allowNull: false,
+            }
+        });
         Title.hasMany(TitleName);
         TitleRating.init({
             id: {
@@ -242,15 +318,19 @@ class Backend {
                 allowNull: false,
                 primaryKey: true
             },
-            region: sequelize.DataTypes.STRING(32),
-            certification: sequelize.DataTypes.STRING(32),
+            region: sequelize.DataTypes.TEXT,
+            certification: sequelize.DataTypes.TEXT,
         }, {
             sequelize: this.db,
             underscored: true,
             modelName: 'title_rating',
             indexes: []
         });
-        TitleRating.belongsTo(Title);
+        TitleRating.belongsTo(Title, {
+            foreignKey: {
+                allowNull: false,
+            }
+        });
         Title.hasMany(TitleRating);
         TitleSubtitles.init({
             id: {
@@ -259,10 +339,10 @@ class Backend {
                 allowNull: false,
                 primaryKey: true
             },
-            format: sequelize.DataTypes.STRING(64),
-            language: sequelize.DataTypes.STRING(64),
-            region: sequelize.DataTypes.STRING(64),
-            specifier: sequelize.DataTypes.STRING(64),
+            format: sequelize.DataTypes.TEXT,
+            language: sequelize.DataTypes.TEXT,
+            region: sequelize.DataTypes.TEXT,
+            specifier: sequelize.DataTypes.TEXT,
             src: sequelize.DataTypes.TEXT,
         }, {
             sequelize: this.db,
@@ -270,7 +350,11 @@ class Backend {
             modelName: 'title_subtitles',
             indexes: []
         });
-        TitleSubtitles.belongsTo(Title);
+        TitleSubtitles.belongsTo(Title, {
+            foreignKey: {
+                allowNull: false,
+            }
+        });
         Title.hasMany(TitleSubtitles);
     }
 

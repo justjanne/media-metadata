@@ -69,7 +69,7 @@ class ImdbApi {
                        'isAdult', json(case when title.isAdult = 0 then 'false' else 'true' end),
                        'startYear', title.startYear,
                        'endYear', title.endYear,
-                       'runtimeMinutes', title.runtimeMinutes,
+                       'runtime', title.runtimeMinutes,
                        'genres', json('["' || replace(title.genres, ',', '","') || '"]'),
                        'rating', json_object(
                                'averageRating', title_ratings.averageRating,
@@ -133,7 +133,7 @@ class ImdbApi {
                        'id', title.tconst,
                        'primaryTitle', title.primaryTitle,
                        'originalTitle', title.originalTitle,
-                       'runtimeMinutes', title.runtimeMinutes
+                       'runtime', title.runtimeMinutes
                    ) AS json
         FROM title_episode
                  JOIN title ON title_episode.tconst = title.tconst

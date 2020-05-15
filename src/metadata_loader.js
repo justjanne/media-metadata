@@ -50,16 +50,16 @@ class MetadataLoader {
         })
         const primaryTitleName = await TitleName.build({
             region: null,
-            languages: null,
-            original: false,
+            languages: [],
+            kind: "primary",
             name: imdbResult.primaryTitle,
         });
         await primaryTitleName.setTitle(title.id, {save: false});
         await primaryTitleName.save();
         const originalTitleName = await TitleName.build({
             region: null,
-            languages: null,
-            original: true,
+            languages: [],
+            kind: "original",
             name: imdbResult.originalTitle,
         });
         await originalTitleName.setTitle(title.id, {save: false});
@@ -68,7 +68,7 @@ class MetadataLoader {
             const titleName = await TitleName.build({
                 region: el.region,
                 languages: el.languages ? el.languages.split(",") : [],
-                original: false,
+                kind: "localized",
                 name: el.title,
             })
             await titleName.setTitle(title.id, {save: false});
@@ -81,7 +81,8 @@ class MetadataLoader {
         })
         const originalTitleDescription = await TitleDescription.build({
             region: null,
-            languages: null,
+            languages: [],
+            kind: "original",
             overview: tmdbResult.overview,
             tagline: tmdbResult.tagline,
         });
@@ -91,6 +92,7 @@ class MetadataLoader {
             const titleDescription = await TitleDescription.build({
                 region: el.iso_3166_1,
                 languages: el.iso_639_1 ? el.iso_639_1.split(",") : [],
+                kind: "localized",
                 overview: el.data.overview,
                 tagline: el.data.tagline,
             })
@@ -110,7 +112,7 @@ class MetadataLoader {
 
             const titleCast = await TitleCast.build({
                 category: el.category,
-                characters: el.characters,
+                characters: el.characters || [],
                 job: el.job,
             });
             await titleCast.setTitle(title.id, {save: false});
@@ -165,7 +167,7 @@ class MetadataLoader {
         const showTitle = await Title.findByPk(ids.uuid);
         const [mapping] = await TitleEpisode.findOrBuild({
             where: {
-                show_id: showTitle.id,
+                parent_id: showTitle.id,
                 season_number: episodeIdentifier.season,
                 episode_number: episodeIdentifier.episode,
             },
@@ -179,11 +181,13 @@ class MetadataLoader {
             tmdb_id: tmdbResult.id,
             tvdb_id: null,
             original_language: showTitle.original_language,
+            runtime: imdbResult.runtime,
         }, {returning: true});
         mapping.air_date = tmdbResult.air_date;
-        await mapping.setShow(showTitle.id, {save: false});
-        await mapping.setEpisode(episodeTitle, {save: false});
+        await mapping.setParent(showTitle, {save: false});
         await mapping.save();
+        await episodeTitle.setParent(mapping, { save: false});
+        await episodeTitle.save();
         await TitleName.destroy({
             where: {
                 title_id: episodeTitle.id,
@@ -191,29 +195,31 @@ class MetadataLoader {
         })
         const primaryTitleName = await TitleName.build({
             region: null,
-            languages: null,
-            original: false,
+            languages: [],
+            kind: "primary",
             name: imdbResult.primaryTitle,
         });
         await primaryTitleName.setTitle(episodeTitle.id, {save: false});
         await primaryTitleName.save();
         const originalTitleName = await TitleName.build({
             region: null,
-            languages: null,
-            original: true,
+            languages: [],
+            kind: "original",
             name: imdbResult.originalTitle,
         });
         await originalTitleName.setTitle(episodeTitle.id, {save: false});
         await originalTitleName.save();
         for (let el of tmdbTranslations.translations) {
-            const titleName = await TitleName.build({
-                region: el.iso_3166_1,
-                languages: el.iso_639_1 ? el.iso_639_1.split(",") : [],
-                original: false,
-                name: el.data.name,
-            })
-            await titleName.setTitle(episodeTitle.id, {save: false});
-            await titleName.save();
+            if (el.data.name) {
+                const titleName = await TitleName.build({
+                    region: el.iso_3166_1,
+                    languages: el.iso_639_1 ? el.iso_639_1.split(",") : [],
+                    kind: "localized",
+                    name: el.data.name,
+                })
+                await titleName.setTitle(episodeTitle.id, {save: false});
+                await titleName.save();
+            }
         }
         await TitleDescription.destroy({
             where: {
@@ -222,21 +228,25 @@ class MetadataLoader {
         })
         const originalTitleDescription = await TitleDescription.build({
             region: null,
-            languages: null,
+            languages: [],
+            kind: "original",
             overview: tmdbResult.overview,
             tagline: tmdbResult.tagline,
         });
         await originalTitleDescription.setTitle(episodeTitle.id, {save: false});
         await originalTitleDescription.save();
         for (let el of tmdbTranslations.translations) {
-            const titleDescription = await TitleDescription.build({
-                region: el.iso_3166_1,
-                languages: el.iso_639_1 ? el.iso_639_1.split(",") : [],
-                overview: el.data.overview,
-                tagline: el.data.tagline,
-            })
-            await titleDescription.setTitle(episodeTitle.id, {save: false});
-            await titleDescription.save();
+            if (el.data.overview) {
+                const titleDescription = await TitleDescription.build({
+                    region: el.iso_3166_1,
+                    languages: el.iso_639_1 ? el.iso_639_1.split(",") : [],
+                    kind: "localized",
+                    overview: el.data.overview,
+                    tagline: el.data.tagline,
+                })
+                await titleDescription.setTitle(episodeTitle.id, {save: false});
+                await titleDescription.save();
+            }
         }
 
         return episodeTitle;
@@ -349,29 +359,29 @@ class MetadataLoader {
     async processImages(basePath, filePath, images) {
         const imageData = !images ? [] : [
             !images.logo ? null : !images.logo.url ? null : {
-                type: "logo",
+                kind: "logo",
                 url: images.logo.url,
                 src: encodePath(path.relative(basePath, path.join(filePath, "metadata", `logo${path.extname(images.logo.url)}`)))
             },
             !images.poster ? null : !images.poster.file_path ? null : {
-                type: "poster",
+                kind: "poster",
                 url: this.tmdb.getImageUrl(images.poster.file_path),
                 src: encodePath(path.relative(basePath, path.join(filePath, "metadata", `poster${path.extname(images.poster.file_path)}`)))
             },
             !images.backdrop ? null : !images.backdrop.file_path ? null : {
-                type: "backdrop",
+                kind: "backdrop",
                 url: this.tmdb.getImageUrl(images.backdrop.file_path),
                 src: encodePath(path.relative(basePath, path.join(filePath, "metadata", `backdrop${path.extname(images.backdrop.file_path)}`)))
             },
             !images.still ? null : !images.still.file_path ? null : {
-                type: "still",
+                kind: "still",
                 url: this.tmdb.getImageUrl(images.still.file_path),
                 src: encodePath(path.relative(basePath, path.join(filePath, "metadata", `still${path.extname(images.still.file_path)}`)))
             }
         ].filter(el => el !== null);
 
         return await Promise.all(imageData.map(async img => {
-            const headers = await downloadFile(img.url, path.join(filePath, "metadata", img.type + path.extname(img.url)));
+            const headers = await downloadFile(img.url, path.join(filePath, "metadata", img.kind + path.extname(img.url)));
             return {
                 mime: headers["content-type"],
                 ...img,
@@ -387,7 +397,7 @@ class MetadataLoader {
         })
         for (let image of images) {
             const titleImage = await TitleImage.build({
-                type: image.type,
+                kind: image.kind,
                 mime: image.mime,
                 src: image.src,
             })
