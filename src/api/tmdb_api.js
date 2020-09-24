@@ -25,7 +25,10 @@ class TmdbApi {
             headers: {
                 'Authorization': `Bearer ${this.apiKey}`,
                 'Content-Type': 'application/json;charset=utf-8',
-            }
+            },
+            options: {
+                timeout: 2000,
+            },
         }).then((response) => {
             return response.text().then(text => {
                 return {
@@ -39,6 +42,9 @@ class TmdbApi {
                 throw new Error(`${url}: ${body}`);
             }
             return JSON.parse(body);
+        }).catch(err => {
+            console.error(err);
+            return null;
         });
     }
 }

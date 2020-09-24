@@ -1,5 +1,5 @@
 import ranking_confidence from './util/statistics';
-import uuid from 'uuid';
+import {v4 as uuidv4} from 'uuid';
 import path from "path";
 import downloadFile from "./util/download-file";
 import encodePath from "./util/encode-path";
@@ -11,7 +11,8 @@ import {
     TitleDescription,
     TitleEpisode,
     TitleGenre,
-    TitleImage, TitleMedia,
+    TitleImage,
+    TitleMedia,
     TitleName,
     TitleRating,
     TitleSubtitles
@@ -172,7 +173,7 @@ class MetadataLoader {
                 episode_number: episodeIdentifier.episode,
             },
             defaults: {
-                episode_id: uuid.v4(),
+                episode_id: uuidv4,
             }
         })
         const [episodeTitle] = await Title.upsert({
@@ -312,7 +313,7 @@ class MetadataLoader {
         if (!tmdbResult) return null;
 
         return {
-            uuid: uuid.v4(),
+            uuid: uuidv4(),
             imdb: tmdbResult.imdb_id,
             tmdb: result.id,
             tvdb: null,
@@ -349,7 +350,7 @@ class MetadataLoader {
         const tmdbId = tmdbSeries.id;
 
         return {
-            uuid: uuid.v4(),
+            uuid: uuidv4(),
             imdb: imdbId,
             tvdb: tvdbId,
             tmdb: tmdbId,
@@ -472,17 +473,36 @@ class MetadataLoader {
             }
         }
 
-        const fanartSource = titleType === "tvSeries" ?
+        const isShow = titleType === "tvSeries";
+        const fanartSource = isShow ?
             `tv/${ids.tmdb}` :
             `movies/${ids.tmdb}`;
 
-        const [imdbResult, tmdbResult, tmdbTranslations, tmdbContentRatings, tmdbImages, fanartImages] = await Promise.all([
-            this.imdb.findById(ids.imdb).catch(_ => null),
-            ...tmdbSources().map(url => this.tmdb.request(url).catch(_ => null)),
-            this.fanart.request(fanartSource).catch(_ => null) // do nothing, it just means it wasn’t found
-        ].filter(el => el !== null));
+        const [
+            imdbResult, imdbAka, imdbPrincipals, imdbEpisodes,
+            tmdbResult, tmdbTranslations, tmdbContentRatings, tmdbImages,
+            fanartImages
+        ] = await Promise.all([
+            this.imdb.findById(ids.imdb),
+            this.imdb.findByIdAka(ids.imdb),
+            this.imdb.findByIdPrincipals(ids.imdb),
+            isShow ? this.imdb.findByIdEpisodes(ids.imdb) : new Promise((resolve) => resolve([])),
+            ...tmdbSources().map(url => this.tmdb.request(url)),
+            this.fanart.request(fanartSource),
+        ].map(it => it.catch(err => {
+            console.error(`Error while processing ${ids.imdb}`, err);
+            process.abort();
+            return null;
+        })));
+        const imdbData = {
+            ...imdbResult,
+            aka: imdbAka,
+            principals: imdbPrincipals,
+            episodes: imdbEpisodes,
+        };
 
-        const title = await this.transformData(ids, imdbResult, tmdbResult, tmdbContentRatings, tmdbTranslations);
+        const title = await this.transformData(ids, imdbData, tmdbResult, tmdbContentRatings, tmdbTranslations);
+
         return {
             title: title,
             images: this.chooseImages(title.original_language, tmdbImages, fanartImages)

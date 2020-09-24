@@ -14,9 +14,11 @@ class FanartApi {
         const params = new URLSearchParams(options || {});
         params.append("api_key", this.apiKey);
         url.search = params.toString();
-        return fetch(
-            url.href
-        ).then((response) => {
+        return fetch(url.href, {
+            options: {
+                timeout: 2000,
+            },
+        }).then((response) => {
             return response.text().then(text => {
                 return {
                     ok: response.ok,
@@ -29,6 +31,9 @@ class FanartApi {
                 throw new Error(`${url}: ${body}`);
             }
             return JSON.parse(body);
+        }).catch(err => {
+            console.error(err);
+            return null;
         });
     }
 }

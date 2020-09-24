@@ -52,29 +52,32 @@ class FileManager {
     }
 
     async listEpisodes(showPath) {
-        return fsPromises
-            .readdir(showPath, {withFileTypes: true})
-            .then(result => result
-                .filter(dir => dir.isDirectory())
-                .map(dir => {
-                    const match = /^(?:(?:(?<year>\d+)-(?<month>\d+)-(?<day>\d+))|(?:(?:S(?<season>\d+(?:[.\-–—&]\d+)?))?\p{L}*[\t\f ]*(?<episode>\d+(?:[.\-–—&]\d+)?)))(?:(?:[\t\f ]+(?:[\-–—:][\t\f ]*)?)(?<title>\S.*))?$/u.exec(dir.name);
-                    if (!match) {
-                        return null;
-                    }
-                    const {season, episode, year, month, day} = match.groups
-                    return {
-                        filePath: path.join(showPath, dir.name),
-                        src: encodePath(path.relative(this.basePath, path.join(showPath, dir.name))),
-                        episodeIdentifier: {
-                            season: season,
-                            episode: episode,
-                            year: year,
-                            month: month,
-                            day: day,
-                        },
-                    }
-                }).filter(el => el !== null)
-            );
+        const files = await fsPromises
+            .readdir(showPath, {withFileTypes: true});
+        const dirs = files.filter(it => {
+            return it.isDirectory();
+        });
+        const matched = dirs.map(it => {
+            return {
+                name: it.name,
+                match: /^(?:(?:(?<year>\d+)-(?<month>\d+)-(?<day>\d+))|(?:(?:S(?<season>\d+(?:[.\-–—&]\d+)?))?\p{L}*[\t\f ]*(?<episode>\d+(?:[.\-–—&]\d+)?)))(?:(?:[\t\f ]+(?:[\-–—:][\t\f ]*)?)(?<title>\S.*))?$/u.exec(it.name)?.groups
+            };
+        }).filter(it => it.match !== undefined);
+        const mapped = matched.map(it => {
+            const {season, episode, year, month, day} = it.match
+            return {
+                filePath: path.join(showPath, it.name),
+                src: encodePath(path.relative(this.basePath, path.join(showPath, it.name))),
+                episodeIdentifier: {
+                    season: season,
+                    episode: episode,
+                    year: year,
+                    month: month,
+                    day: day,
+                },
+            }
+        });
+        return mapped;
     }
 
     async findIds(filePath) {

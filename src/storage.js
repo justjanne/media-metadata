@@ -30,7 +30,11 @@ class Backend {
                 allowNull: false,
                 primaryKey: true
             },
-            tmdb_id: sequelize.DataTypes.INTEGER,
+            tmdb_id: {
+                type: sequelize.DataTypes.INTEGER,
+                allowNull: false,
+                unique: true,
+            },
             name: {
                 type: sequelize.DataTypes.TEXT,
                 allowNull: false,
@@ -48,7 +52,11 @@ class Backend {
                 allowNull: false,
                 primaryKey: true
             },
-            imdb_id: sequelize.DataTypes.TEXT,
+            imdb_id: {
+                type: sequelize.DataTypes.TEXT,
+                allowNull: false,
+                unique: true,
+            },
             name: {
                 type: sequelize.DataTypes.TEXT,
                 allowNull: false,
@@ -194,7 +202,7 @@ class Backend {
                 allowNull: false,
             }
         })
-        Title.belongsTo(TitleEpisode, {
+        Title.hasMany(TitleEpisode, {
             as: "Parent",
             foreignKey: {
                 name: "parent_id",
