@@ -78,6 +78,7 @@ class Backend {
             imdb_id: sequelize.DataTypes.TEXT,
             tmdb_id: sequelize.DataTypes.INTEGER,
             tvdb_id: sequelize.DataTypes.INTEGER,
+            kind: sequelize.DataTypes.TEXT,
             original_language: sequelize.DataTypes.TEXT,
             runtime: sequelize.DataTypes.INTEGER,
             year_start: sequelize.DataTypes.INTEGER,

@@ -34,12 +34,13 @@ class MetadataLoader {
         this.storage = storage;
     }
 
-    async transformData(ids, imdbResult, tmdbResult, tmdbContentRatings, tmdbTranslations) {
+    async transformData(ids, imdbResult, tmdbResult, tmdbContentRatings, tmdbTranslations, kind) {
         const [title] = await Title.upsert({
             id: ids.uuid,
             imdb_id: ids.imdb,
             tmdb_id: ids.tmdb,
             tvdb_id: ids.tvdb,
+            kind,
             original_language: tmdbResult.original_language,
             runtime: imdbResult.runtime,
             year_start: imdbResult.startYear,
@@ -179,6 +180,7 @@ class MetadataLoader {
         })
         const [episodeTitle] = await Title.upsert({
             id: mapping.episode_id,
+            kind: "episode",
             imdb_id: imdbResult.id,
             tmdb_id: tmdbResult.id,
             tvdb_id: null,
@@ -514,7 +516,7 @@ class MetadataLoader {
             episodes: imdbEpisodes,
         };
 
-        const title = await this.transformData(ids, imdbData, tmdbResult, tmdbContentRatings, tmdbTranslations);
+        const title = await this.transformData(ids, imdbData, tmdbResult, tmdbContentRatings, tmdbTranslations, isShow ? "show" : "movie");
 
         return {
             title: title,
