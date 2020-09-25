@@ -168,12 +168,12 @@ class MetadataLoader {
         const showTitle = await Title.findByPk(ids.uuid);
         const [mapping] = await TitleEpisode.findOrBuild({
             where: {
-                parent_id: showTitle.id,
+                show_id: showTitle.id,
                 season_number: episodeIdentifier.season,
                 episode_number: episodeIdentifier.episode,
             },
             defaults: {
-                episode_id: uuidv4,
+                episode_id: uuidv4(),
             }
         })
         const [episodeTitle] = await Title.upsert({
@@ -185,10 +185,10 @@ class MetadataLoader {
             runtime: imdbResult.runtime,
         }, {returning: true});
         mapping.air_date = tmdbResult.air_date;
-        await mapping.setParent(showTitle, {save: false});
-        await mapping.save();
-        await episodeTitle.setParent(mapping, { save: false});
         await episodeTitle.save();
+        await mapping.setEpisode(episodeTitle, {save: false});
+        await mapping.setShow(showTitle, {save: false});
+        await mapping.save();
         await TitleName.destroy({
             where: {
                 title_id: episodeTitle.id,
@@ -475,7 +475,7 @@ class MetadataLoader {
 
         const isShow = titleType === "tvSeries";
         const fanartSource = isShow ?
-            `tv/${ids.tmdb}` :
+            `tv/${ids.tvdb}` :
             `movies/${ids.tmdb}`;
 
         const [

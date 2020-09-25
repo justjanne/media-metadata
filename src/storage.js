@@ -170,7 +170,7 @@ class Backend {
             indexes: [
                 {
                     fields: [
-                        'parent_id',
+                        'show_id',
                         {
                             attribute: 'season_number',
                             collate: 'C',
@@ -186,7 +186,7 @@ class Backend {
                 {
                     using: 'BTREE',
                     fields: [
-                        'parent_id',
+                        'show_id',
                         {
                             attribute: 'air_date',
                             order: 'ASC',
@@ -196,19 +196,33 @@ class Backend {
             ]
         });
         TitleEpisode.belongsTo(Title, {
-            as: "Parent",
+            as: "Show",
             foreignKey: {
-                name: "parent_id",
+                name: "show_id",
                 allowNull: false,
             }
-        })
-        Title.hasMany(TitleEpisode, {
-            as: "Parent",
+        });
+        TitleEpisode.belongsTo(Title, {
+            as: "Episode",
             foreignKey: {
-                name: "parent_id",
+                name: "episode_id",
+                allowNull: false,
+            }
+        });
+        Title.hasMany(TitleEpisode, {
+            as: "Show",
+            foreignKey: {
+                name: "show_id",
                 allowNull: true,
             }
-        })
+        });
+        Title.hasOne(TitleEpisode, {
+            as: "Episode",
+            foreignKey: {
+                name: "episode_id",
+                allowNull: true,
+            }
+        });
         TitleGenre.init({
             id: {
                 type: sequelize.DataTypes.UUID,
