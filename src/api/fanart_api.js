@@ -19,18 +19,26 @@ class FanartApi {
                 timeout: 2000,
             },
         }).then((response) => {
-            return response.text().then(text => {
-                return {
-                    ok: response.ok,
-                    body: text,
-                }
-            });
-        }).then((data) => {
-            const {ok, body} = data;
-            if (!ok) {
-                throw new Error(`${url}: ${body}`);
+            if (response.status === 404) {
+                return null;
+            } else {
+                return response.text().then(text => {
+                    return {
+                        ok: response.ok,
+                        body: text,
+                    }
+                });
             }
-            return JSON.parse(body);
+        }).then((data) => {
+            if (data === null) {
+                return null;
+            } else {
+                const {ok, body} = data;
+                if (!ok) {
+                    throw new Error(`${url}: ${body}`);
+                }
+                return JSON.parse(body);
+            }
         }).catch(err => {
             console.error(err);
             return null;
