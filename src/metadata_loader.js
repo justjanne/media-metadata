@@ -14,6 +14,7 @@ import {
     TitleImage,
     TitleMedia,
     TitleName,
+    TitlePreview,
     TitleRating,
     TitleSubtitles
 } from "./model";
@@ -237,7 +238,7 @@ class MetadataLoader {
         await originalTitleDescription.setTitle(episodeTitle.id, {save: false});
         await originalTitleDescription.save();
         for (let el of tmdbTranslations.translations) {
-            if (el.data.overview) {
+            if (el.data.overview && el.data.overview.trim() !== "") {
                 const titleDescription = await TitleDescription.build({
                     region: el.iso_3166_1,
                     languages: el.iso_639_1 ? el.iso_639_1.split(",") : [],
@@ -408,11 +409,23 @@ class MetadataLoader {
     }
 
     async processMediaMetadata(title, media) {
-        await TitleMedia.destroy({
-            where: {
-                title_id: title.id,
-            }
-        })
+        await Promise.all([
+            TitleMedia.destroy({
+                where: {
+                    title_id: title.id,
+                }
+            }),
+            TitleSubtitles.destroy({
+                where: {
+                    title_id: title.id,
+                }
+            }),
+            TitlePreview.destroy({
+                where: {
+                    title_id: title.id,
+                }
+            })
+        ]);
         for (let format of media.media) {
             const titleMedia = await TitleMedia.build({
                 mime: format.container,
@@ -423,11 +436,6 @@ class MetadataLoader {
             await titleMedia.setTitle(title.id, {save: false});
             await titleMedia.save();
         }
-        await TitleSubtitles.destroy({
-            where: {
-                title_id: title.id,
-            }
-        })
         for (let subtitle of media.subtitles) {
             const titleSubtitles = await TitleSubtitles.build({
                 language: subtitle.language,
@@ -439,6 +447,11 @@ class MetadataLoader {
             await titleSubtitles.setTitle(title.id, {save: false});
             await titleSubtitles.save();
         }
+        const titlePreview = await TitlePreview.build({
+            src: media.preview,
+        })
+        await titlePreview.setTitle(title.id, {save: false});
+        await titlePreview.save();
     }
 
     async loadEpisodeMetadata(ids, episodeIdentifier) {

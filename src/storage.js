@@ -10,8 +10,9 @@ import {
     TitleImage,
     TitleMedia,
     TitleName,
+    TitlePreview,
     TitleRating,
-    TitleSubtitles
+    TitleSubtitles,
 } from "./model";
 
 class Backend {
@@ -399,13 +400,36 @@ class Backend {
             }
         });
         Title.hasMany(TitleSubtitles);
+        TitlePreview.init({
+            id: {
+                type: sequelize.DataTypes.UUID,
+                defaultValue: sequelize.DataTypes.UUIDV4,
+                allowNull: false,
+                primaryKey: true
+            },
+            src: {
+                type: sequelize.DataTypes.TEXT,
+                allowNull: true,
+            },
+        }, {
+            sequelize: this.db,
+            underscored: true,
+            modelName: 'title_preview',
+            indexes: []
+        });
+        TitlePreview.belongsTo(Title, {
+            foreignKey: {
+                allowNull: false,
+            }
+        });
+        Title.hasOne(TitlePreview);
     }
 
     async sync() {
         await Promise.all([
             Genre.sync(), Person.sync(), Title.sync(),
             TitleCast.sync(), TitleDescription.sync(), TitleEpisode.sync(), TitleGenre.sync(), TitleImage.sync(),
-            TitleMedia.sync(), TitleName.sync(), TitleRating.sync(), TitleSubtitles.sync(),
+            TitleMedia.sync(), TitleName.sync(), TitleRating.sync(), TitleSubtitles.sync(), TitlePreview.sync(),
         ]);
     }
 

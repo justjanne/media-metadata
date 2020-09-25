@@ -114,6 +114,10 @@ class FileManager {
             fileName.endsWith(".vtt")
         )
 
+        const previewFilePath = path.join(base, "spritesheets", "preview.vtt");
+        const previewFileExists = (await fsPromises.stat(previewFilePath)).isFile();
+        const previewFile = previewFileExists ? previewFilePath : null;
+
         const mediaFiles = dashManifest ? [dashManifest] : files.filter(fileName =>
             fileName.endsWith(".mp4") ||
             fileName.endsWith(".webm") ||
@@ -138,7 +142,8 @@ class FileManager {
                     src: encodePath(path.relative(this.basePath, path.join(base, "subtitles", name)))
                 }
             }),
-            media: media
+            preview: previewFile !== null ? encodePath(path.relative(this.basePath, previewFile)) : null,
+            media
         }
     }
 }

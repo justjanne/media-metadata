@@ -35,3 +35,6 @@ export class TitleRating extends sequelize.Model {
 
 export class TitleSubtitles extends sequelize.Model {
 }
+
+export class TitlePreview extends sequelize.Model {
+}
