@@ -19,12 +19,12 @@ async function processContent(basePath, fileManager, loader) {
         await loader.processImageMetadata(title, imageData);
         await loader.processMediaMetadata(title, media);
 
+        fsPromises.wr
         await fsPromises.writeFile(path.join(filePath, "ids.json"), JSON.stringify(ids, null, 2));
         console.info(`Finished movie ${name} (${year})`);
     }
 
     async function processEpisode(showIds, episodeIdentifier, filePath) {
-        console.info(`Processing episode`, episodeIdentifier);
         const [media, {title, images}] = await Promise.all([
             fileManager.findMedia(filePath),
             loader.loadEpisodeMetadata(showIds, episodeIdentifier),
@@ -32,7 +32,6 @@ async function processContent(basePath, fileManager, loader) {
         const imageData = await loader.processImages(basePath, filePath, images);
         await loader.processImageMetadata(title, imageData);
         await loader.processMediaMetadata(title, media);
-        console.info(`Finished episode`, episodeIdentifier);
     }
 
     async function processShow(filePath) {

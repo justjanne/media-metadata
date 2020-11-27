@@ -115,7 +115,7 @@ class FileManager {
         )
 
         const previewFilePath = path.join(base, "spritesheets", "preview.vtt");
-        const previewFileExists = (await fsPromises.stat(previewFilePath)).isFile();
+        const previewFileExists = (await fsPromises.stat(previewFilePath).catch(() => null))?.isFile() === true;
         const previewFile = previewFileExists ? previewFilePath : null;
 
         const mediaFiles = dashManifest ? [dashManifest] : files.filter(fileName =>

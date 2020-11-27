@@ -6,7 +6,7 @@ class FanartApi {
 
     constructor(apiKey, baseUrl) {
         this.apiKey = apiKey;
-        this.baseUrl = baseUrl || "http://webservice.fanart.tv/v3/";
+        this.baseUrl = baseUrl || "https://webservice.fanart.tv/v3/";
     }
 
     request(path, options) {

@@ -22,14 +22,12 @@ import {
 class MetadataLoader {
     imdb;
     tmdb;
-    tvdb;
     fanart;
     storage;
 
-    constructor(imdb, tmdb, tvdb, fanart, storage) {
+    constructor(imdb, tmdb, fanart, storage) {
         this.imdb = imdb;
         this.tmdb = tmdb;
-        this.tvdb = tvdb;
         this.fanart = fanart;
         this.storage = storage;
     }
@@ -183,7 +181,6 @@ class MetadataLoader {
             kind: "episode",
             imdb_id: imdbResult.id,
             tmdb_id: tmdbResult.id,
-            tvdb_id: null,
             original_language: showTitle.original_language,
             runtime: imdbResult.runtime,
         }, {returning: true});
@@ -324,39 +321,25 @@ class MetadataLoader {
     }
 
     async identifyShow(showTitle, showYear) {
-        const tvdbResults = await this.tvdb.getSeriesByName(showTitle)
-        if (!tvdbResults) return null;
+        const results = await this.tmdb.request(`search/tv`, {
+            query: showTitle,
+            first_air_date_year: showYear
+        }).catch((e) => console.error(e));
+        if (!results) return null;
 
-        const result = tvdbResults.find(show => {
-            const {year} = /^(?<year>\d+)(?:-(?<month>\d+)(?:-(?<day>\d+))?)?$/.exec(show.firstAired).groups;
-            return year === showYear;
-        });
+        const result = results.results.sort((a, b) => {
+            return b.popularity - a.popularity;
+        })[0];
         if (!result) return null;
 
-        const tvdbId = result.id;
-        if (!tvdbId) return null;
-
-        const tvdbSeries = await this.tvdb.getSeriesById(tvdbId);
-        if (!tvdbSeries) return null;
-
-        const imdbId = tvdbSeries.imdbId;
-        const tmdbResults = (await this.tmdb.request(`find/${imdbId}`, {
-            external_source: "imdb_id"
-        })) || (await this.tmdb.request(`find/${tvdbId}`, {
-            external_source: "tvdb_id"
-        }))
-        if (!tmdbResults) return null;
-
-        const tmdbSeries = tmdbResults.tv_results ? tmdbResults.tv_results[0] : null;
-        if (!tmdbSeries) return null;
-
-        const tmdbId = tmdbSeries.id;
+        const tmdbResult = await this.tmdb.request(`tv/${result.id}/external_ids`);
+        if (!tmdbResult) return null;
 
         return {
             uuid: uuidv4(),
-            imdb: imdbId,
-            tvdb: tvdbId,
-            tmdb: tmdbId,
+            imdb: tmdbResult.imdb_id,
+            tvdb: tmdbResult.tvdb_id,
+            tmdb: result.id,
         }
     }
 

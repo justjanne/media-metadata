@@ -3,7 +3,6 @@ import sequelize from "sequelize";
 
 import ImdbApi from './api/imdb_api';
 import TmdbApi from './api/tmdb_api';
-import TvdbApi from 'node-tvdb';
 import FanartApi from './api/fanart_api';
 
 import MetadataLoader from "./metadata_loader";
@@ -23,7 +22,6 @@ async function main() {
     const imdbApi = new ImdbApi(process.env.IMDB_PATH);
     const tmdbApi = new TmdbApi(process.env.TMDB_API_KEY);
     await tmdbApi.updateConfiguration();
-    const tvdbApi = new TvdbApi(process.env.TVDB_API_KEY);
     const fanartApi = new FanartApi(process.env.FANART_API_KEY);
 
     console.info("Setting up backend");
@@ -36,6 +34,7 @@ async function main() {
             host: process.env.DB_HOST,
             port: +process.env.DB_PORT,
             ssl: !!process.env.DB_SSL,
+            logging: false,
         }
     ));
     console.info("Migrating backend database");
@@ -44,7 +43,7 @@ async function main() {
 
     console.info("Setting up media ingestion tools");
     const videoMimeParser = new VideoMimeParser(process.env.MP4INFO_PATH || "mp4info", process.env.FFPROBE_PATH || "ffprobe");
-    const loader = new MetadataLoader(imdbApi, tmdbApi, tvdbApi, fanartApi, storage);
+    const loader = new MetadataLoader(imdbApi, tmdbApi, fanartApi, storage);
     const fileManager = new FileManager(basePath, videoMimeParser);
     await fileManager.updateConfiguration();
 
