@@ -260,6 +260,7 @@ class Backend {
                 primaryKey: true
             },
             kind: sequelize.DataTypes.TEXT,
+            language: sequelize.DataTypes.TEXT,
             mime: {
                 type: sequelize.DataTypes.TEXT,
                 allowNull: false,

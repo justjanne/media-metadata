@@ -1,6 +1,6 @@
 import fetch from 'node-fetch';
 
-class TmdbApi {
+export default class TmdbApi {
     apiKey;
     baseUrl;
 
@@ -43,10 +43,8 @@ class TmdbApi {
             }
             return JSON.parse(body);
         }).catch(err => {
-            console.error(err);
+            console.error(`Requesting data from TMDB failed: ${url}`, err);
             return null;
         });
     }
 }
-
-export default TmdbApi;

@@ -254,46 +254,72 @@ class MetadataLoader {
     }
 
     chooseImages(originalLanguage, tmdbImages, fanartImages) {
-        function findbest(list) {
-            let sorted = list.sort((a, b) => b.likes - a.likes);
-            return sorted.find(el => el.language === originalLanguage) || sorted[0];
-        }
-
-        function calculateConfidenceAndQuality(containsText, originalLanguage) {
-            return (element) => {
-                return {
-                    confidence: ranking_confidence(element.vote_average, element.vote_count),
-                    lang_quality: containsText ? (
-                        element.iso_639_1 === originalLanguage ? 1.5 :
-                            element.iso_639_1 === null ? 1 :
-                                0
-                    ) : (
-                        element.iso_639_1 === null ? 1.5 :
-                            element.iso_639_1 === originalLanguage ? 1 :
-                                0
-                    ),
-                    megapixels: (element.height * element.width) / 1000000,
-                    ...element
-                }
+        function calculateConfidenceAndQuality(element) {
+            return {
+                confidence: ranking_confidence(element.vote_average, element.vote_count),
+                megapixels: (element.height * element.width) / 1000000,
+                ...element
             }
         }
 
         function imageComparator(a, b) {
             function rank(element) {
-                return element.lang_quality * (0.01 + element.confidence) * Math.sqrt(element.megapixels)
+                return (0.01 + element.confidence) * Math.sqrt(element.megapixels)
             }
 
             return rank(b) - rank(a)
         }
 
+        function transformFanartImage(image) {
+            if (!image) {
+                return null;
+            }
+
+            const modifiedUrl = new URL(image.url);
+            modifiedUrl.protocol = "http";
+            return {
+                ...image,
+                url: modifiedUrl.href,
+            }
+        }
+
+        const languages = Array.from(new Set([
+            ...Object.values(tmdbImages)
+                .flatMap(it => it)
+                .map(it => it.iso_639_1),
+            ...(fanartImages && fanartImages.hdmovielogo || [])
+                .map(it => it.language)
+        ]));
+
+        const sortedLogos = (fanartImages && fanartImages.hdmovielogo || [])
+            .sort((a, b) => b.likes - a.likes);
+
+        const sortedPosters = (tmdbImages.posters || [])
+            .map(calculateConfidenceAndQuality)
+            .sort(imageComparator);
+
+        const sortedBackdrops = (tmdbImages.backdrops || [])
+            .map(calculateConfidenceAndQuality)
+            .sort(imageComparator);
+
+        const sortedStills = (tmdbImages.stills || [])
+            .map(calculateConfidenceAndQuality)
+            .sort(imageComparator);
+
         return {
-            logo: fanartImages && fanartImages.hdmovielogo ? findbest(fanartImages.hdmovielogo) : null,
-            poster: tmdbImages.posters && tmdbImages.posters.map(calculateConfidenceAndQuality(true, originalLanguage))
-                .sort(imageComparator)[0],
-            backdrop: tmdbImages.backdrops && tmdbImages.backdrops.map(calculateConfidenceAndQuality(false, originalLanguage))
-                .sort(imageComparator)[0],
-            still: tmdbImages.stills && tmdbImages.stills.map(calculateConfidenceAndQuality(false, originalLanguage))
-                .sort(imageComparator)[0],
+            logo: languages
+                .map(lang => sortedLogos.find(it => it.lang === lang))
+                .filter(it => it !== undefined)
+                .map(transformFanartImage),
+            poster: languages
+                .map(lang => sortedPosters.find(it => it.iso_639_1 === lang))
+                .filter(it => it !== undefined),
+            backdrop: languages
+                .map(lang => sortedBackdrops.find(it => it.iso_639_1 === lang))
+                .filter(it => it !== undefined),
+            still: languages
+                .map(lang => sortedStills.find(it => it.iso_639_1 === lang))
+                .filter(it => it !== undefined),
         }
     }
 
@@ -344,31 +370,44 @@ class MetadataLoader {
     }
 
     async processImages(basePath, filePath, images) {
-        const imageData = !images ? [] : [
-            !images.logo ? null : !images.logo.url ? null : {
-                kind: "logo",
-                url: images.logo.url,
-                src: encodePath(path.relative(basePath, path.join(filePath, "metadata", `logo${path.extname(images.logo.url)}`)))
-            },
-            !images.poster ? null : !images.poster.file_path ? null : {
-                kind: "poster",
-                url: this.tmdb.getImageUrl(images.poster.file_path),
-                src: encodePath(path.relative(basePath, path.join(filePath, "metadata", `poster${path.extname(images.poster.file_path)}`)))
-            },
-            !images.backdrop ? null : !images.backdrop.file_path ? null : {
-                kind: "backdrop",
-                url: this.tmdb.getImageUrl(images.backdrop.file_path),
-                src: encodePath(path.relative(basePath, path.join(filePath, "metadata", `backdrop${path.extname(images.backdrop.file_path)}`)))
-            },
-            !images.still ? null : !images.still.file_path ? null : {
-                kind: "still",
-                url: this.tmdb.getImageUrl(images.still.file_path),
-                src: encodePath(path.relative(basePath, path.join(filePath, "metadata", `still${path.extname(images.still.file_path)}`)))
-            }
-        ].filter(el => el !== null);
+        const imageData = [
+            ...images.logo.map(it => {
+                return {
+                    kind: "logo",
+                    language: it.lang || null,
+                    url: it.url,
+                    src: encodePath(path.relative(basePath, path.join(filePath, "metadata", `logo.${it.lang || null}${path.extname(it.url)}`)))
+                }
+            }),
+            ...images.poster.map(it => {
+                return {
+                    kind: "poster",
+                    language: it.iso_639_1 || null,
+                    url: this.tmdb.getImageUrl(it.file_path),
+                    src: encodePath(path.relative(basePath, path.join(filePath, "metadata", `poster.${it.iso_639_1 || null}${path.extname(it.file_path)}`)))
+                }
+            }),
+            ...images.backdrop.map(it => {
+                return {
+                    kind: "backdrop",
+                    language: it.iso_639_1 || null,
+                    url: this.tmdb.getImageUrl(it.file_path),
+                    src: encodePath(path.relative(basePath, path.join(filePath, "metadata", `backdrop.${it.iso_639_1 || null}${path.extname(it.file_path)}`)))
+                }
+            }),
+            ...images.still.map(it => {
+                return {
+                    kind: "still",
+                    language: it.iso_639_1 || null,
+                    url: this.tmdb.getImageUrl(it.file_path),
+                    src: encodePath(path.relative(basePath, path.join(filePath, "metadata", `still.${it.iso_639_1 || null}${path.extname(it.file_path)}`)))
+                }
+            })
+        ]
 
         return await Promise.all(imageData.map(async img => {
-            const headers = await downloadFile(img.url, path.join(filePath, "metadata", img.kind + path.extname(img.url)));
+            console.log("Downloading image " + img.kind + " (" + img.language+") for " + filePath);
+            const headers = await downloadFile(img.url, path.join(filePath, "metadata", img.kind + "." + img.language + path.extname(img.url)));
             return {
                 mime: headers["content-type"],
                 ...img,
@@ -385,6 +424,7 @@ class MetadataLoader {
         for (let image of images) {
             const titleImage = await TitleImage.build({
                 kind: image.kind,
+                language: image.language,
                 mime: image.mime,
                 src: image.src,
             })

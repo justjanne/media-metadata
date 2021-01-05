@@ -1,6 +1,6 @@
 import fetch from 'node-fetch';
 
-class FanartApi {
+export default class FanartApi {
     apiKey;
     baseUrl;
 
@@ -40,10 +40,8 @@ class FanartApi {
                 return JSON.parse(body);
             }
         }).catch(err => {
-            console.error(err);
+            console.error(`Requesting data from Fanart.tv failed: ${url}`, err);
             return null;
         });
     }
 }
-
-export default FanartApi;
